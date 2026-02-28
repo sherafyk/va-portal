@@ -95,6 +95,11 @@ export default function NavBar() {
               Board
             </Link>
 
+            <Link className={navLinkClass('/help')} href="/help" target="_blank" rel="noreferrer">
+              Help
+            </Link>
+
+
             {isAdmin && (
               <Link className={navLinkClass('/clients')} href="/clients">
                 Clients

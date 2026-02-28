@@ -1,131 +1,76 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import LogoutButton from './LogoutButton'
-
-type Profile = {
-  id: string
-  full_name: string | null
-  role: string
-}
+import { useEffect, useState } from 'react'
 
 export default function NavBar() {
   const pathname = usePathname()
-  const router = useRouter()
-
-  const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [role, setRole] = useState<string | null>(null)
 
   useEffect(() => {
-    const init = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const session = sessionData.session
+    const loadRole = async () => {
+      const { data } = await supabase.auth.getSession()
+      const user = data.session?.user
+      if (!user) return
 
-      if (!session) {
-        setProfile(null)
-        setLoading(false)
-        if (pathname !== '/login') router.push('/login')
-        return
-      }
-
-      const { data: pData, error: pErr } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, role')
-        .eq('id', session.user.id)
+        .select('role')
+        .eq('id', user.id)
         .single()
 
-      if (!pErr && pData) setProfile(pData as Profile)
-      setLoading(false)
+      if (profile) setRole(profile.role)
     }
 
-    init()
+    loadRole()
+  }, [])
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setProfile(null)
-        if (pathname !== '/login') router.push('/login')
-      }
-    })
-
-    return () => sub.subscription.unsubscribe()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
-
-  if (pathname === '/login') return null
-  if (loading) return null
-
-  const navLinkClass = (href: string) =>
-    `px-3 py-2 rounded ${
-      pathname === href ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-200'
+  const linkClass = (path: string) =>
+    `px-3 py-2 rounded-md text-sm font-medium transition ${
+      pathname.startsWith(path)
+        ? 'bg-blue-100 text-blue-700'
+        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
     }`
 
-  const isAdmin = profile?.role === 'admin'
-
   return (
-    <div className="w-full border-b bg-white">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-bold">VA Portal</span>
+    <nav className="bg-white border-b border-slate-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <span className="text-lg font-semibold text-slate-900">
+            VA Portal
+          </span>
 
-          <nav className="ml-6 flex items-center gap-2">
-            {isAdmin ? (
-              <Link className={navLinkClass('/')} href="/">
-                Dashboard
-              </Link>
-            ) : (
-              <Link className={navLinkClass('/my-work')} href="/my-work">
-                My Work
-              </Link>
-            )}
+          <Link href="/my-work" className={linkClass('/my-work')}>
+            My Work
+          </Link>
 
-            <Link className={navLinkClass('/tickets')} href="/tickets">
-              Tickets
-            </Link>
+          <Link href="/tickets" className={linkClass('/tickets')}>
+            Tickets
+          </Link>
 
-            {isAdmin && (
-              <Link className={navLinkClass('/tickets/new')} href="/tickets/new">
-                New Ticket
-              </Link>
-            )}
+          <Link href="/board" className={linkClass('/board')}>
+            Board
+          </Link>
 
-            <Link className={navLinkClass('/board')} href="/board">
-              Board
-            </Link>
+          <Link href="/help" className={linkClass('/help')}>
+            Help
+          </Link>
 
-            <Link className={navLinkClass('/help')} href="/help" target="_blank" rel="noreferrer">
-              Help
-            </Link>
-
-
-            {isAdmin && (
-              <Link className={navLinkClass('/clients')} href="/clients">
+          {role === 'admin' && (
+            <>
+              <Link href="/clients" className={linkClass('/clients')}>
                 Clients
               </Link>
-            )}
 
-            {isAdmin && (
-              <Link className={navLinkClass('/templates')} href="/templates">
+              <Link href="/templates" className={linkClass('/templates')}>
                 Templates
               </Link>
-            )}
-          </nav>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {profile && (
-            <div className="text-sm text-gray-600 text-right">
-              <div className="font-medium text-gray-800">
-                {profile.full_name || 'User'}
-              </div>
-              <div className="text-xs">{profile.role}</div>
-            </div>
+            </>
           )}
-          <LogoutButton />
         </div>
       </div>
-    </div>
+    </nav>
   )
 }

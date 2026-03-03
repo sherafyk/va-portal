@@ -41,6 +41,18 @@ type Comment = {
   created_at: string
 }
 
+type TimeEntry = {
+  id: string
+  ticket_id: string
+  user_id: string
+  work_date: string
+  minutes: number | null
+  started_at: string | null
+  ended_at: string | null
+  note: string | null
+  created_at: string
+}
+
 type Profile = {
   id: string
   full_name: string | null
@@ -49,6 +61,24 @@ type Profile = {
 
 const STATUSES = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'done', 'archived']
 const PRIORITIES = ['critical', 'high', 'normal', 'low']
+
+function toISODate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+function minutesFromEntry(e: TimeEntry): number {
+  if (typeof e.minutes === 'number' && Number.isFinite(e.minutes)) return Math.max(0, e.minutes)
+  if (e.started_at && e.ended_at) {
+    const a = new Date(e.started_at).getTime()
+    const b = new Date(e.ended_at).getTime()
+    const mins = Math.round((b - a) / 60000)
+    return Math.max(0, mins)
+  }
+  return 0
+}
 
 function getSection(md: string, heading: string): string {
   // Extract content under `## Heading` until next `## `
@@ -135,6 +165,13 @@ export default function TicketDetailPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
 
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [runningEntry, setRunningEntry] = useState<TimeEntry | null>(null)
+  const [startNote, setStartNote] = useState('')
+  const [manualHours, setManualHours] = useState('')
+  const [manualNote, setManualNote] = useState('')
+  const [timeSaving, setTimeSaving] = useState(false)
+
   const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
   const [assignees, setAssignees] = useState<Profile[]>([])
 
@@ -162,8 +199,17 @@ export default function TicketDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [confirm, setConfirm] = useState<null | { type: 'archive' | 'delete' }>(null)
 
+  // used to refresh the running timer UI
+  const [tick, setTick] = useState(0)
+
   // Checklist UI-only checkmarks (not persisted)
   const [checked, setChecked] = useState<Record<number, boolean>>({})
+
+  useEffect(() => {
+    if (!runningEntry) return
+    const id = setInterval(() => setTick(t => t + 1), 30_000)
+    return () => clearInterval(id)
+  }, [runningEntry])
 
   const canEditMeta = me.isAdmin
   const canEditInstructions = me.isAdmin
@@ -179,6 +225,18 @@ export default function TicketDetailPage() {
   }, [profilesMap])
 
   const checklistItems = useMemo(() => parseChecklist(sections.checklist || ''), [sections.checklist])
+
+  const totalLoggedMinutes = useMemo(
+    () => timeEntries.reduce((sum, e) => sum + minutesFromEntry(e), 0),
+    [timeEntries]
+  )
+
+  const runningElapsedMinutes = useMemo(() => {
+    if (!runningEntry?.started_at) return 0
+    const start = new Date(runningEntry.started_at).getTime()
+    const now = Date.now()
+    return Math.max(0, Math.round((now - start) / 60000))
+  }, [runningEntry, tick])
 
   // Keep raw <-> structured in sync when toggling advanced editor.
   useEffect(() => {
@@ -276,11 +334,32 @@ export default function TicketDetailPage() {
       setComments((cmData ?? []) as Comment[])
     }
 
+    // Time entries
+    const { data: teData, error: teErr } = await supabase
+      .from('time_entries')
+      .select('id,ticket_id,user_id,work_date,minutes,started_at,ended_at,note,created_at')
+      .eq('ticket_id', ticketId)
+      .order('work_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (teErr) {
+      toast.error(teErr.message, 'Failed to load time entries')
+      setTimeEntries([])
+      setRunningEntry(null)
+    } else {
+      const rows = (teData ?? []) as TimeEntry[]
+      setTimeEntries(rows)
+      const running = rows.find(r => r.user_id === me.userId && r.started_at && !r.ended_at) || null
+      setRunningEntry(running)
+    }
+
     // Profiles map (assigned, created, comment authors)
     const ids = new Set<string>()
     if (t.assigned_to) ids.add(t.assigned_to)
     if (t.created_by) ids.add(t.created_by)
     ;(cmData ?? []).forEach((c: any) => c.author_id && ids.add(c.author_id))
+
+    ;(teData ?? []).forEach((t: any) => t.user_id && ids.add(t.user_id))
 
     if (ids.size > 0) {
       const idList = Array.from(ids)
@@ -490,6 +569,100 @@ export default function TicketDetailPage() {
 
     toast.success('Ticket deleted')
     router.push('/tickets')
+  }
+
+  const startTimer = async () => {
+    if (!me.userId) return
+    if (runningEntry) {
+      toast.info('Timer already running for you on this ticket.')
+      return
+    }
+    setTimeSaving(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('time_entries').insert([
+      {
+        ticket_id: ticketId,
+        user_id: me.userId,
+        work_date: toISODate(new Date()),
+        started_at: now,
+        ended_at: null,
+        minutes: null,
+        note: startNote.trim() || null
+      }
+    ])
+    setTimeSaving(false)
+    if (error) {
+      toast.error(error.message, 'Failed to start timer')
+      return
+    }
+    toast.success('Timer started')
+    setStartNote('')
+    await loadEverything()
+  }
+
+  const stopTimer = async () => {
+    if (!runningEntry) return
+    setTimeSaving(true)
+    const end = new Date()
+    const start = new Date(runningEntry.started_at || '')
+    const minutes = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60000))
+
+    const { error } = await supabase
+      .from('time_entries')
+      .update({ ended_at: end.toISOString(), minutes })
+      .eq('id', runningEntry.id)
+
+    setTimeSaving(false)
+    if (error) {
+      toast.error(error.message, 'Failed to stop timer')
+      return
+    }
+    toast.success(`Timer stopped (${(minutes / 60).toFixed(2)} hr)`)
+    await loadEverything()
+  }
+
+  const addManualEntry = async () => {
+    if (!me.userId) return
+    const hours = Number(manualHours)
+    if (!Number.isFinite(hours) || hours <= 0) {
+      toast.error('Enter a valid number of hours (e.g. 1.5).')
+      return
+    }
+    const minutes = Math.round(hours * 60)
+    setTimeSaving(true)
+    const { error } = await supabase.from('time_entries').insert([
+      {
+        ticket_id: ticketId,
+        user_id: me.userId,
+        work_date: toISODate(new Date()),
+        minutes,
+        started_at: null,
+        ended_at: null,
+        note: manualNote.trim() || null
+      }
+    ])
+    setTimeSaving(false)
+    if (error) {
+      toast.error(error.message, 'Failed to add entry')
+      return
+    }
+    toast.success('Time entry added')
+    setManualHours('')
+    setManualNote('')
+    await loadEverything()
+  }
+
+  const deleteTimeEntry = async (id: string) => {
+    if (!confirm('Delete this time entry?')) return
+    setTimeSaving(true)
+    const { error } = await supabase.from('time_entries').delete().eq('id', id)
+    setTimeSaving(false)
+    if (error) {
+      toast.error(error.message, 'Failed to delete entry')
+      return
+    }
+    toast.success('Entry deleted')
+    await loadEverything()
   }
 
   if (me.loading || loading) return <div className="text-sm text-slate-600">Loading…</div>
@@ -838,6 +1011,133 @@ export default function TicketDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Time</h2>
+                <div className="text-sm text-slate-600">Log work for this ticket.</div>
+              </div>
+              <Link className="text-sm text-blue-700 hover:underline" href="/timesheet">
+                Timesheet
+              </Link>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Total logged</span>
+                <span className="font-medium">{totalLoggedMinutes} min ({(totalLoggedMinutes / 60).toFixed(2)} hr)</span>
+              </div>
+              {runningEntry && (
+                <div className="mt-2 text-xs text-slate-600">
+                  Your timer is running: {runningElapsedMinutes} min ({(runningElapsedMinutes / 60).toFixed(2)} hr)
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {!runningEntry ? (
+                <>
+                  <input
+                    value={startNote}
+                    onChange={e => setStartNote(e.target.value)}
+                    placeholder="Optional note (what are you starting?)"
+                    disabled={timeSaving}
+                  />
+                  <button
+                    onClick={startTimer}
+                    disabled={timeSaving}
+                    className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    {timeSaving ? 'Starting…' : 'Start timer'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={stopTimer}
+                  disabled={timeSaving}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  {timeSaving ? 'Stopping…' : 'Stop timer'}
+                </button>
+              )}
+            </div>
+
+            <details className="rounded-lg border border-slate-200 bg-white p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Add manual entry</summary>
+              <div className="mt-3 space-y-2">
+                <div>
+                  <label className="block mb-1">Hours</label>
+                  <input
+                    value={manualHours}
+                    onChange={e => setManualHours(e.target.value)}
+                    placeholder="e.g. 1.5"
+                    inputMode="decimal"
+                    disabled={timeSaving}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1">Note (optional)</label>
+                  <input
+                    value={manualNote}
+                    onChange={e => setManualNote(e.target.value)}
+                    placeholder="What did you do?"
+                    disabled={timeSaving}
+                  />
+                </div>
+                <button
+                  onClick={addManualEntry}
+                  disabled={timeSaving}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Add entry
+                </button>
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-slate-200 bg-white p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">Recent entries</summary>
+              <div className="mt-3 space-y-2">
+                {timeEntries.length === 0 ? (
+                  <div className="text-sm text-slate-600">No time logged yet.</div>
+                ) : (
+                  timeEntries.slice(0, 6).map(e => {
+                    const mins = minutesFromEntry(e)
+                    const label = e.started_at
+                      ? e.ended_at
+                        ? `${mins} min • ${formatDateTime(e.started_at)}`
+                        : `Running… • ${formatDateTime(e.started_at)}`
+                      : `${mins} min • ${formatDateTime(e.created_at)}`
+
+                    const canRemove = me.isAdmin || e.user_id === me.userId
+
+                    return (
+                      <div key={e.id} className="rounded-md border border-slate-200 p-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm text-slate-800">{label}</div>
+                            <div className="text-xs text-slate-600 truncate">{e.note || '—'}</div>
+                          </div>
+                          {canRemove && !(!e.ended_at && e.started_at) && (
+                            <button
+                              onClick={() => deleteTimeEntry(e.id)}
+                              className="text-xs text-red-700 hover:underline"
+                              disabled={timeSaving}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                {timeEntries.length > 6 && (
+                  <div className="text-xs text-slate-500">Open Timesheet to see all entries.</div>
+                )}
+              </div>
+            </details>
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-2">
             <h2 className="text-lg font-semibold text-slate-900">Details</h2>
             <div className="text-sm text-slate-800 space-y-1">

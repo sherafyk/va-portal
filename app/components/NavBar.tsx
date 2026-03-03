@@ -52,7 +52,8 @@ export default function NavBar() {
     )
   }
 
-  const homeHref = me.isAdmin ? '/' : '/my-work'
+  // Admin home points to Tickets (we removed the heavy dashboard at '/').
+  const homeHref = me.isAdmin ? '/tickets' : '/my-work'
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut()
@@ -92,9 +93,7 @@ export default function NavBar() {
                 <div className="text-sm font-medium text-slate-900 truncate max-w-[220px]">
                   {me.fullName || me.email || 'Signed in'}
                 </div>
-                <div className="text-xs text-slate-500">
-                  {me.isAdmin ? 'Admin' : 'VA'}
-                </div>
+                <div className="text-xs text-slate-500">{me.isAdmin ? 'Admin' : 'VA'}</div>
               </div>
 
               <button

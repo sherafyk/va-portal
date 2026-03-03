@@ -4,25 +4,25 @@ import Link from 'next/link'
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
+    <div className="space-y-6">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold">VA Portal Help</h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-2xl font-semibold text-slate-900">VA Portal Help</h1>
+            <p className="text-slate-600 mt-2">
               This portal is the single source of truth for tasks. If it isn’t in a ticket, it isn’t official work.
             </p>
           </div>
 
-          <Link className="underline text-sm mt-2" href="/my-work">
+          <Link className="text-sm text-blue-700 hover:underline mt-2" href="/my-work">
             Go to My Work →
           </Link>
         </div>
 
         {/* Quick Start */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Quick Start</h2>
-          <ol className="list-decimal pl-6 space-y-2 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Quick Start</h2>
+          <ol className="list-decimal pl-6 space-y-2 text-slate-800">
             <li>Log in with your VA credentials.</li>
             <li>
               Go to <b>My Work</b> to see your assigned tickets.
@@ -40,9 +40,9 @@ export default function HelpPage() {
         </section>
 
         {/* Golden Rules */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Golden Rules</h2>
-          <ul className="list-disc pl-6 space-y-2 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Golden Rules</h2>
+          <ul className="list-disc pl-6 space-y-2 text-slate-800">
             <li>
               <b>Work only from tickets.</b> DMs and random messages are not task requests.
             </li>
@@ -62,9 +62,9 @@ export default function HelpPage() {
         </section>
 
         {/* Navigation */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Pages & Navigation</h2>
-          <div className="space-y-3 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Pages & Navigation</h2>
+          <div className="space-y-3 text-slate-800">
             <div>
               <b>My Work</b> (VA main page): Your assigned tickets only. Start here every day.
             </div>
@@ -84,33 +84,33 @@ export default function HelpPage() {
         </section>
 
         {/* Ticket Structure */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Ticket Structure</h2>
-          <p className="text-gray-800 mb-4">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Ticket Structure</h2>
+          <p className="text-slate-800 mb-4">
             Every ticket is written in a consistent format. This makes instructions predictable and reduces back-and-forth.
           </p>
 
-          <div className="space-y-4 text-gray-800">
+          <div className="space-y-4 text-slate-800">
             <div>
               <h3 className="font-semibold">1) Context</h3>
-              <p className="text-gray-700">
+              <p className="text-slate-700">
                 Why this task exists, background details, and the intent. Read this first.
               </p>
             </div>
 
             <div>
               <h3 className="font-semibold">2) Checklist</h3>
-              <p className="text-gray-700">
+              <p className="text-slate-700">
                 The step-by-step instructions. On the ticket page, these render as UI checkboxes for convenience.
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Note: checklist checkmarks are UI-only and do not persist after refresh (by design).
               </p>
             </div>
 
             <div>
               <h3 className="font-semibold">3) Links & Access</h3>
-              <p className="text-gray-700">
+              <p className="text-slate-700">
                 All required URLs should be here (website, WP admin, Drive folder, sheets, docs, etc.). If anything is
                 missing, comment on the ticket.
               </p>
@@ -118,14 +118,14 @@ export default function HelpPage() {
 
             <div>
               <h3 className="font-semibold">4) Definition of Done</h3>
-              <p className="text-gray-700">
+              <p className="text-slate-700">
                 The completion criteria. If you’re unsure whether the task is “done,” compare your output to this section.
               </p>
             </div>
 
             <div>
               <h3 className="font-semibold">5) Notes</h3>
-              <p className="text-gray-700">
+              <p className="text-slate-700">
                 Edge cases, special rules, formatting requirements, naming conventions, or “do not touch” warnings.
               </p>
             </div>
@@ -133,9 +133,9 @@ export default function HelpPage() {
         </section>
 
         {/* Status Workflow */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Status Workflow (Recommended)</h2>
-          <ul className="list-disc pl-6 space-y-2 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Status Workflow (Recommended)</h2>
+          <ul className="list-disc pl-6 space-y-2 text-slate-800">
             <li>
               <b>backlog</b>: Not started yet.
             </li>
@@ -161,13 +161,13 @@ export default function HelpPage() {
         </section>
 
         {/* Comments & Updates */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">How to Post Updates</h2>
-          <p className="text-gray-800 mb-3">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">How to Post Updates</h2>
+          <p className="text-slate-800 mb-3">
             Use ticket comments for everything. A good update is short, specific, and includes links.
           </p>
 
-          <div className="border rounded p-4 bg-gray-50 text-sm text-gray-800 whitespace-pre-wrap">
+          <div className="border rounded p-4 bg-slate-50 text-sm text-slate-800 whitespace-pre-wrap">
             Update format:
             {'\n'}
             - What I did
@@ -179,15 +179,15 @@ export default function HelpPage() {
             - Any blockers + what I need from you
           </div>
 
-          <p className="text-gray-700 mt-3">
+          <p className="text-slate-700 mt-3">
             If needed, use <b>Copy Summary</b> on the ticket page to copy a clean status update to your clipboard.
           </p>
         </section>
 
         {/* Common Tasks */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Common Task Types</h2>
-          <div className="space-y-3 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Common Task Types</h2>
+          <div className="space-y-3 text-slate-800">
             <div>
               <b>Web research</b>: Follow the checklist, keep source links, summarize clearly.
             </div>
@@ -207,9 +207,9 @@ export default function HelpPage() {
         </section>
 
         {/* Security */}
-        <section className="bg-white rounded shadow p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">Security & Access</h2>
-          <ul className="list-disc pl-6 space-y-2 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-3">Security & Access</h2>
+          <ul className="list-disc pl-6 space-y-2 text-slate-800">
             <li>Never store passwords in comments unless instructed by admin.</li>
             <li>Never share credentials outside the portal/task instructions.</li>
             <li>If a login fails, comment with the error message and the exact URL you used.</li>
@@ -217,9 +217,9 @@ export default function HelpPage() {
         </section>
 
         {/* Troubleshooting */}
-        <section className="bg-white rounded shadow p-6">
-          <h2 className="text-xl font-semibold mb-3">Troubleshooting</h2>
-          <div className="space-y-3 text-gray-800">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold mb-3">Troubleshooting</h2>
+          <div className="space-y-3 text-slate-800">
             <div>
               <b>I can’t see my tickets:</b> Confirm you are logged into the correct account. Then ask admin to confirm the ticket is assigned to you.
             </div>
@@ -235,10 +235,10 @@ export default function HelpPage() {
           </div>
         </section>
 
-        <div className="text-xs text-gray-500 mt-6">
+        <div className="text-xs text-slate-500 mt-6">
           Portal docs are living. If you find a gap or repeated confusion, tell admin and we’ll update this page.
         </div>
       </div>
-    </main>
+    </div>
   )
 }

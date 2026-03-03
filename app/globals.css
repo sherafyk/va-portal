@@ -6,7 +6,7 @@
 
   --background: #f8fafc; /* slate-50 */
   --foreground: #0f172a; /* slate-900 */
-  --primary: #2563eb;    /* blue-600 */
+  --primary: #2563eb; /* blue-600 */
 }
 
 /* Keep your existing theme wiring (fine to keep) */
@@ -29,17 +29,47 @@
   }
 }
 
-html,
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+@layer base {
+  html,
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+  }
 
-a {
-  color: var(--primary);
-}
+  a {
+    color: var(--primary);
+  }
 
-a:hover {
-  text-decoration: underline;
+  a:hover {
+    text-decoration: underline;
+  }
+
+  /* Consistent, readable form controls */
+  input[type='text'],
+  input[type='email'],
+  input[type='password'],
+  input[type='date'],
+  input[type='url'],
+  textarea,
+  select {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500;
+  }
+
+  textarea {
+    @apply leading-5;
+  }
+
+  label {
+    @apply text-sm font-medium text-slate-800;
+  }
+
+  button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  ::placeholder {
+    @apply text-slate-400;
+  }
 }

@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useMe } from '@/lib/useMe'
+import { useToast } from '@/app/components/ui/Toast'
+import ConfirmDialog from '@/app/components/ui/ConfirmDialog'
 
 type Client = { id: string; name: string }
-type Profile = { id: string; role: string; full_name: string | null }
 
 type TemplateVar = {
   key: string
@@ -30,9 +32,11 @@ const CATEGORIES = ['general', 'research', 'wp', 'data', 'admin', 'monitoring', 
 
 export default function TemplatesPage() {
   const router = useRouter()
+  const toast = useToast()
+  const me = useMe()
+
   const [loading, setLoading] = useState(true)
 
-  const [me, setMe] = useState<Profile | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [templates, setTemplates] = useState<TemplateRow[]>([])
 
@@ -58,8 +62,14 @@ export default function TemplatesPage() {
   const [definitionOfDone, setDefinitionOfDone] = useState('')
   const [notes, setNotes] = useState('')
 
-  // NEW: variables
+  // variables
   const [variables, setVariables] = useState<TemplateVar[]>([])
+
+  // list filters
+  const [query, setQuery] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
+
+  const [confirmDelete, setConfirmDelete] = useState<TemplateRow | null>(null)
 
   const resetForm = () => {
     setEditingId(null)
@@ -82,48 +92,31 @@ export default function TemplatesPage() {
   }
 
   const loadAll = async () => {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const session = sessionData.session
-    if (!session) {
+    if (me.loading) return
+    if (!me.userId) {
       router.push('/login')
       return
     }
-
-    const { data: pData, error: pErr } = await supabase
-      .from('profiles')
-      .select('id, role, full_name')
-      .eq('id', session.user.id)
-      .single()
-
-    if (pErr || !pData) {
-      alert(`Failed to load profile: ${pErr?.message || 'No profile'}`)
-      router.push('/login')
-      return
-    }
-
-    if (pData.role !== 'admin') {
+    if (!me.isAdmin) {
       router.push('/my-work')
       return
     }
-    setMe(pData as Profile)
 
-    const { data: cData, error: cErr } = await supabase
-      .from('clients')
-      .select('id,name')
-      .order('name', { ascending: true })
+    setLoading(true)
 
-    if (cErr) alert(`Failed to load clients: ${cErr.message}`)
-    setClients((cData ?? []) as Client[])
+    const [cRes, tRes] = await Promise.all([
+      supabase.from('clients').select('id,name').order('name', { ascending: true }),
+      supabase.from('ticket_templates').select('*').order('updated_at', { ascending: false })
+    ])
 
-    const { data: tData, error: tErr } = await supabase
-      .from('ticket_templates')
-      .select('*')
-      .order('updated_at', { ascending: false })
+    if (cRes.error) toast.error(cRes.error.message, 'Failed to load clients')
+    setClients((cRes.data ?? []) as Client[])
 
-    if (tErr) {
-      alert(`Failed to load templates: ${tErr.message}`)
+    if (tRes.error) {
+      toast.error(tRes.error.message, 'Failed to load templates')
+      setTemplates([])
     } else {
-      setTemplates((tData ?? []) as TemplateRow[])
+      setTemplates((tRes.data ?? []) as TemplateRow[])
     }
 
     setLoading(false)
@@ -132,7 +125,7 @@ export default function TemplatesPage() {
   useEffect(() => {
     loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [me.loading, me.userId, me.isAdmin])
 
   const clientName = useMemo(() => {
     const map: Record<string, string> = {}
@@ -166,10 +159,7 @@ export default function TemplatesPage() {
   }
 
   const addVar = () => {
-    setVariables(prev => [
-      ...prev,
-      { key: '', label: '', placeholder: '', required: false }
-    ])
+    setVariables(prev => [...prev, { key: '', label: '', placeholder: '', required: false }])
   }
 
   const updateVar = (idx: number, patch: Partial<TemplateVar>) => {
@@ -182,7 +172,7 @@ export default function TemplatesPage() {
 
   const saveTemplate = async () => {
     if (!name.trim()) {
-      alert('Template name is required.')
+      toast.error('Template name is required.')
       return
     }
 
@@ -199,7 +189,7 @@ export default function TemplatesPage() {
     const dup = new Set<string>()
     for (const v of cleanVars) {
       if (dup.has(v.key)) {
-        alert(`Duplicate variable key: ${v.key}`)
+        toast.error(`Duplicate variable key: ${v.key}`)
         return
       }
       dup.add(v.key)
@@ -211,16 +201,20 @@ export default function TemplatesPage() {
       client_id: clientId || null,
       is_active: isActive,
       defaults: { taskType, priority, status, effort },
-      content: { context, checklist, linksHint, definitionOfDone, notes, variables: cleanVars }
+      content: {
+        context,
+        checklist,
+        linksHint,
+        definitionOfDone,
+        notes,
+        variables: cleanVars
+      }
     }
 
     let errMsg: string | null = null
 
     if (editingId) {
-      const { error } = await supabase
-        .from('ticket_templates')
-        .update(payload)
-        .eq('id', editingId)
+      const { error } = await supabase.from('ticket_templates').update(payload).eq('id', editingId)
       if (error) errMsg = error.message
     } else {
       const { error } = await supabase.from('ticket_templates').insert([payload])
@@ -228,44 +222,137 @@ export default function TemplatesPage() {
     }
 
     if (errMsg) {
-      alert(`Save failed: ${errMsg}`)
+      toast.error(errMsg, 'Save failed')
       return
     }
 
+    toast.success(editingId ? 'Template updated' : 'Template created')
     resetForm()
     await loadAll()
   }
 
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!me || me.role !== 'admin') return null
+  const toggleTemplateActive = async (t: TemplateRow) => {
+    const { error } = await supabase
+      .from('ticket_templates')
+      .update({ is_active: !t.is_active })
+      .eq('id', t.id)
+
+    if (error) {
+      toast.error(error.message, 'Update failed')
+      return
+    }
+
+    toast.success(t.is_active ? 'Template deactivated' : 'Template activated')
+    await loadAll()
+  }
+
+  const deleteTemplate = async (t: TemplateRow) => {
+    const { error } = await supabase.from('ticket_templates').delete().eq('id', t.id)
+    if (error) {
+      toast.error(error.message, 'Delete failed')
+      return
+    }
+
+    toast.success('Template deleted')
+    await loadAll()
+  }
+
+  const duplicateTemplate = async (t: TemplateRow) => {
+    const payload = {
+      name: `${t.name} (copy)`,
+      category: t.category,
+      client_id: t.client_id,
+      is_active: false,
+      defaults: t.defaults,
+      content: t.content
+    }
+
+    const { error } = await supabase.from('ticket_templates').insert([payload])
+    if (error) {
+      toast.error(error.message, 'Duplicate failed')
+      return
+    }
+
+    toast.success('Template duplicated (inactive)')
+    await loadAll()
+  }
+
+  const filteredTemplates = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return templates.filter(t => {
+      if (!showInactive && !t.is_active) return false
+      if (!q) return true
+      return (
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.category || '').toLowerCase().includes(q) ||
+        clientName(t.client_id).toLowerCase().includes(q)
+      )
+    })
+  }, [templates, query, showInactive, clientName])
+
+  if (me.loading || loading) return <div className="text-sm text-slate-600">Loading…</div>
+  if (!me.isAdmin) return null
 
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-6">Templates (Admin)</h1>
+    <div className="space-y-6">
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete template permanently?"
+        description={
+          confirmDelete
+            ? `${confirmDelete.name}\n\nThis cannot be undone.`
+            : undefined
+        }
+        confirmText="Delete"
+        danger
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={async () => {
+          if (!confirmDelete) return
+          const t = confirmDelete
+          setConfirmDelete(null)
+          await deleteTemplate(t)
+        }}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Templates</h1>
+          <div className="mt-1 text-sm text-slate-600">
+            Repeatable task recipes for fast, consistent ticket creation.
+          </div>
+        </div>
+
+        <button
+          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          onClick={loadAll}
+        >
+          Refresh
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Form */}
-        <div className="bg-white rounded shadow p-6 space-y-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {editingId ? 'Edit Template' : 'Create Template'}
+            <h2 className="text-base font-semibold text-slate-900">
+              {editingId ? 'Edit template' : 'Create template'}
             </h2>
             {editingId && (
-              <button className="underline text-sm" onClick={resetForm}>
+              <button className="text-sm text-blue-700 hover:underline" onClick={resetForm}>
                 Cancel edit
               </button>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Name *</label>
-            <input className="border p-2 w-full" value={name} onChange={e => setName(e.target.value)} />
+            <label className="block mb-1">Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. WP plugin update" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Category</label>
-              <select className="border p-2 w-full" value={category} onChange={e => setCategory(e.target.value)}>
+              <label className="block mb-1">Category</label>
+              <select value={category} onChange={e => setCategory(e.target.value)}>
                 {CATEGORIES.map(c => (
                   <option key={c} value={c}>
                     {c}
@@ -275,8 +362,8 @@ export default function TemplatesPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Client</label>
-              <select className="border p-2 w-full" value={clientId} onChange={e => setClientId(e.target.value)}>
+              <label className="block mb-1">Client</label>
+              <select value={clientId} onChange={e => setClientId(e.target.value)}>
                 <option value="">Global</option>
                 {clients.map(c => (
                   <option key={c.id} value={c.id}>
@@ -286,74 +373,74 @@ export default function TemplatesPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 mt-6">
-              <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} />
-              <span className="text-sm">Active</span>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="h-4 w-4" />
+                Active
+              </label>
             </div>
           </div>
 
-          <div className="border rounded p-4 bg-gray-50 space-y-3">
-            <div className="font-semibold">Defaults</div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div className="font-semibold text-slate-900">Defaults</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Task Type</label>
-                <input className="border p-2 w-full" value={taskType} onChange={e => setTaskType(e.target.value)} />
+                <label className="block text-xs text-slate-600 mb-1">Task Type</label>
+                <input value={taskType} onChange={e => setTaskType(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Priority</label>
-                <input className="border p-2 w-full" value={priority} onChange={e => setPriority(e.target.value)} />
+                <label className="block text-xs text-slate-600 mb-1">Priority</label>
+                <input value={priority} onChange={e => setPriority(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Status</label>
-                <input className="border p-2 w-full" value={status} onChange={e => setStatus(e.target.value)} />
+                <label className="block text-xs text-slate-600 mb-1">Status</label>
+                <input value={status} onChange={e => setStatus(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Effort</label>
-                <input className="border p-2 w-full" value={effort} onChange={e => setEffort(e.target.value)} />
+                <label className="block text-xs text-slate-600 mb-1">Effort</label>
+                <input value={effort} onChange={e => setEffort(e.target.value)} />
               </div>
             </div>
           </div>
 
-          {/* NEW: Variables */}
-          <div className="border rounded p-4 bg-gray-50 space-y-3">
+          {/* Variables */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="font-semibold">Variables</div>
-              <button className="underline text-sm" onClick={addVar}>
+              <div className="font-semibold text-slate-900">Variables</div>
+              <button className="text-sm text-blue-700 hover:underline" onClick={addVar}>
                 + Add variable
               </button>
             </div>
 
             {variables.length === 0 ? (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-slate-600">
                 No variables. Add variables to collect inputs like topic, output link, citation style, etc.
               </div>
             ) : (
               <div className="space-y-3">
                 {variables.map((v, idx) => (
-                  <div key={idx} className="border rounded p-3 bg-white">
+                  <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">Key</label>
+                        <label className="block text-xs text-slate-600 mb-1">Key</label>
                         <input
-                          className="border p-2 w-full font-mono"
+                          className="font-mono"
                           value={v.key}
                           onChange={e => updateVar(idx, { key: e.target.value })}
                           placeholder="topic"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">Label</label>
+                        <label className="block text-xs text-slate-600 mb-1">Label</label>
                         <input
-                          className="border p-2 w-full"
                           value={v.label}
                           onChange={e => updateVar(idx, { label: e.target.value })}
                           placeholder="Topic"
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-xs text-gray-600 mb-1">Placeholder</label>
+                        <label className="block text-xs text-slate-600 mb-1">Placeholder</label>
                         <input
-                          className="border p-2 w-full"
                           value={v.placeholder || ''}
                           onChange={e => updateVar(idx, { placeholder: e.target.value })}
                           placeholder="e.g. Bunker fuel price trends Q1"
@@ -362,20 +449,24 @@ export default function TemplatesPage() {
                     </div>
 
                     <div className="flex items-center justify-between mt-3">
-                      <label className="flex items-center gap-2 text-sm">
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input
                           type="checkbox"
                           checked={!!v.required}
                           onChange={e => updateVar(idx, { required: e.target.checked })}
+                          className="h-4 w-4"
                         />
                         Required
                       </label>
-                      <button className="underline text-sm text-red-600" onClick={() => removeVar(idx)}>
+                      <button
+                        className="text-sm text-red-700 hover:underline"
+                        onClick={() => removeVar(idx)}
+                      >
                         Remove
                       </button>
                     </div>
 
-                    <div className="text-xs text-gray-500 mt-2">
+                    <div className="text-xs text-slate-500 mt-2">
                       Use in content as <span className="font-mono">{`{{var.${(v.key || 'key').trim()}}}`}</span>
                     </div>
                   </div>
@@ -385,70 +476,111 @@ export default function TemplatesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Context</label>
-            <textarea className="border p-2 w-full" rows={3} value={context} onChange={e => setContext(e.target.value)} />
+            <label className="block mb-1">Context</label>
+            <textarea rows={3} value={context} onChange={e => setContext(e.target.value)} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Checklist</label>
-            <textarea className="border p-2 w-full font-mono" rows={6} value={checklist} onChange={e => setChecklist(e.target.value)} />
+            <label className="block mb-1">Checklist</label>
+            <textarea className="font-mono" rows={6} value={checklist} onChange={e => setChecklist(e.target.value)} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Links Hint</label>
-            <textarea className="border p-2 w-full font-mono" rows={5} value={linksHint} onChange={e => setLinksHint(e.target.value)} />
-            <div className="text-xs text-gray-500 mt-1">
-              Supports placeholders like <span className="font-mono">{'{{client.website_url}}'}</span> and <span className="font-mono">{'{{var.output}}'}</span>
+            <label className="block mb-1">Links Hint</label>
+            <textarea className="font-mono" rows={5} value={linksHint} onChange={e => setLinksHint(e.target.value)} />
+            <div className="text-xs text-slate-500 mt-1">
+              Supports placeholders like <span className="font-mono">{'{{client.website_url}}'}</span> and{' '}
+              <span className="font-mono">{'{{var.output}}'}</span>.
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Definition of Done</label>
-            <textarea className="border p-2 w-full" rows={3} value={definitionOfDone} onChange={e => setDefinitionOfDone(e.target.value)} />
+            <label className="block mb-1">Definition of Done</label>
+            <textarea rows={3} value={definitionOfDone} onChange={e => setDefinitionOfDone(e.target.value)} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
-            <textarea className="border p-2 w-full" rows={3} value={notes} onChange={e => setNotes(e.target.value)} />
+            <label className="block mb-1">Notes</label>
+            <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
 
-          <button className="bg-black text-white px-4 py-2 rounded" onClick={saveTemplate}>
-            {editingId ? 'Update Template' : 'Create Template'}
+          <button
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            onClick={saveTemplate}
+          >
+            {editingId ? 'Update template' : 'Create template'}
           </button>
         </div>
 
         {/* List */}
-        <div className="bg-white rounded shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Active Templates</h2>
-          {templates.length === 0 ? (
-            <div className="text-gray-600">No templates yet.</div>
-          ) : (
-            <div className="space-y-3">
-              {templates.map(t => (
-                <div key={t.id} className="border rounded p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Templates</h2>
+              <div className="text-sm text-slate-600">Search, edit, duplicate, deactivate.</div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-64">
+                <label className="block mb-1">Search</label>
+                <input placeholder="Name, category, client…" value={query} onChange={e => setQuery(e.target.value)} />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={e => setShowInactive(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                Show inactive
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {filteredTemplates.length === 0 ? (
+              <div className="text-sm text-slate-600">No templates found.</div>
+            ) : (
+              filteredTemplates.map(t => (
+                <div key={t.id} className="rounded-lg border border-slate-200 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold">{t.name}</div>
-                      <div className="text-sm text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-slate-900">{t.name}</div>
+                        {!t.is_active && (
+                          <span className="text-xs rounded-full bg-slate-100 px-2 py-1 text-slate-700">Inactive</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-slate-600">
                         {t.category} • {clientName(t.client_id)}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Vars: {(t.content?.variables?.length ?? 0)}
-                      </div>
+                      <div className="text-xs text-slate-500 mt-1">Vars: {t.content?.variables?.length ?? 0}</div>
                     </div>
-                    <button className="underline text-sm" onClick={() => startEdit(t)}>
-                      Edit
-                    </button>
+
+                    <div className="flex flex-col items-end gap-2">
+                      <button className="text-sm text-blue-700 hover:underline" onClick={() => startEdit(t)}>
+                        Edit
+                      </button>
+                      <button className="text-sm text-blue-700 hover:underline" onClick={() => duplicateTemplate(t)}>
+                        Duplicate
+                      </button>
+                      <button className="text-sm text-blue-700 hover:underline" onClick={() => toggleTemplateActive(t)}>
+                        {t.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button className="text-sm text-red-700 hover:underline" onClick={() => setConfirmDelete(t)}>
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-2">
-                    Updated: {new Date(t.updated_at).toLocaleString()}
-                  </div>
+
+                  <div className="text-xs text-slate-500 mt-2">Updated: {new Date(t.updated_at).toLocaleString()}</div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }

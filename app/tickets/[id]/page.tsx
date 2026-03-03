@@ -197,7 +197,7 @@ export default function TicketDetailPage() {
 
   const [saving, setSaving] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
-  const [confirm, setConfirm] = useState<null | { type: 'archive' | 'delete' }>(null)
+  const [ticketConfirm, setTicketConfirm] = useState<null | { type: 'archive' | 'delete' }>(null)
 
   // used to refresh the running timer UI
   const [tick, setTick] = useState(0)
@@ -653,7 +653,7 @@ export default function TicketDetailPage() {
   }
 
   const deleteTimeEntry = async (id: string) => {
-    if (!confirm('Delete this time entry?')) return
+    if (typeof window !== 'undefined' && !window.confirm('Delete this time entry?')) return
     setTimeSaving(true)
     const { error } = await supabase.from('time_entries').delete().eq('id', id)
     setTimeSaving(false)
@@ -673,19 +673,19 @@ export default function TicketDetailPage() {
   return (
     <div className="space-y-6">
       <ConfirmDialog
-        open={!!confirm}
-        title={confirm?.type === 'delete' ? 'Delete ticket permanently?' : 'Archive this ticket?'}
+        open={!!ticketConfirm}
+        title={ticketConfirm?.type === 'delete' ? 'Delete ticket permanently?' : 'Archive this ticket?'}
         description={
-          confirm?.type === 'delete'
+          ticketConfirm?.type === 'delete'
             ? 'This will permanently delete the ticket. Make sure comments cascade delete (recommended).'
             : 'Archiving hides the ticket from the board and default views.'
         }
-        confirmText={confirm?.type === 'delete' ? 'Delete' : 'Archive'}
-        danger={confirm?.type === 'delete'}
-        onCancel={() => setConfirm(null)}
+        confirmText={ticketConfirm?.type === 'delete' ? 'Delete' : 'Archive'}
+        danger={ticketConfirm?.type === 'delete'}
+        onCancel={() => setTicketConfirm(null)}
         onConfirm={async () => {
-          const type = confirm?.type
-          setConfirm(null)
+          const type = ticketConfirm?.type
+          setTicketConfirm(null)
           if (type === 'archive') await archiveTicket()
           if (type === 'delete') await deleteTicket()
         }}
@@ -743,14 +743,14 @@ export default function TicketDetailPage() {
           {canDelete && (
             <>
               <button
-                onClick={() => setConfirm({ type: 'archive' })}
+                onClick={() => setTicketConfirm({ type: 'archive' })}
                 disabled={saving}
                 className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
                 Archive
               </button>
               <button
-                onClick={() => setConfirm({ type: 'delete' })}
+                onClick={() => setTicketConfirm({ type: 'delete' })}
                 disabled={saving}
                 className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm text-red-700 hover:bg-red-50"
               >
@@ -1211,14 +1211,14 @@ export default function TicketDetailPage() {
               <div className="text-sm text-slate-600 mt-1">Use Archive for normal cleanup. Delete is permanent.</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
-                  onClick={() => setConfirm({ type: 'archive' })}
+                  onClick={() => setTicketConfirm({ type: 'archive' })}
                   disabled={saving}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   Archive
                 </button>
                 <button
-                  onClick={() => setConfirm({ type: 'delete' })}
+                  onClick={() => setTicketConfirm({ type: 'delete' })}
                   disabled={saving}
                   className="rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-red-700 hover:bg-red-50"
                 >

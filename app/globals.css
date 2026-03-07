@@ -73,3 +73,77 @@
     @apply text-slate-400;
   }
 }
+
+@layer components {
+  .ticket-markdown {
+    @apply text-sm leading-6 text-slate-800;
+  }
+
+  .ticket-markdown > :first-child {
+    @apply mt-0;
+  }
+
+  .ticket-markdown > :last-child {
+    @apply mb-0;
+  }
+
+  .ticket-markdown p,
+  .ticket-markdown ul,
+  .ticket-markdown ol,
+  .ticket-markdown pre,
+  .ticket-markdown blockquote {
+    @apply my-2;
+  }
+
+  .ticket-markdown ul {
+    @apply list-disc pl-5;
+  }
+
+  .ticket-markdown ol {
+    @apply list-decimal pl-5;
+  }
+
+  .ticket-markdown li {
+    @apply my-1;
+  }
+
+  .ticket-markdown h1,
+  .ticket-markdown h2,
+  .ticket-markdown h3,
+  .ticket-markdown h4 {
+    @apply mt-4 mb-2 font-semibold text-slate-900;
+  }
+
+  .ticket-markdown h1 {
+    @apply text-lg;
+  }
+
+  .ticket-markdown h2 {
+    @apply text-base;
+  }
+
+  .ticket-markdown h3,
+  .ticket-markdown h4 {
+    @apply text-sm;
+  }
+
+  .ticket-markdown code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-xs text-slate-900;
+  }
+
+  .ticket-markdown pre {
+    @apply overflow-x-auto rounded-md bg-slate-100 p-3;
+  }
+
+  .ticket-markdown pre code {
+    @apply bg-transparent p-0;
+  }
+
+  .ticket-markdown a {
+    @apply text-blue-700;
+  }
+
+  .ticket-markdown blockquote {
+    @apply border-l-4 border-slate-300 pl-3 italic text-slate-700;
+  }
+}

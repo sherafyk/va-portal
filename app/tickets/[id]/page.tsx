@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ReactMarkdown from 'react-markdown'
 import { supabase } from '@/lib/supabase'
 import { useMe } from '@/lib/useMe'
 import { formatDateTime, dueLabel, isOverdue } from '@/lib/format'
@@ -150,6 +151,25 @@ function parseChecklist(text: string): string[] {
 
   if (items.length === 0) return lines
   return items
+}
+
+function MarkdownBlock({ content, placeholder = '—' }: { content: string; placeholder?: string }) {
+  const text = content.trim()
+
+  if (!text) {
+    return <div className="text-sm text-slate-600">{placeholder}</div>
+  }
+
+  return (
+    <ReactMarkdown
+      className="ticket-markdown"
+      components={{
+        a: props => <a {...props} target="_blank" rel="noreferrer" />
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  )
 }
 
 export default function TicketDetailPage() {
@@ -852,8 +872,8 @@ export default function TicketDetailPage() {
                       placeholder="Background, intent, constraints…"
                     />
                   ) : (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 whitespace-pre-wrap">
-                      {sections.context?.trim() ? sections.context : '—'}
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <MarkdownBlock content={sections.context || ''} />
                     </div>
                   )}
                 </div>
@@ -904,8 +924,8 @@ export default function TicketDetailPage() {
                       placeholder="Website: …\nWP Admin: …\nDrive: …"
                     />
                   ) : (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 whitespace-pre-wrap">
-                      {sections.links?.trim() ? sections.links : '—'}
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <MarkdownBlock content={sections.links || ''} />
                     </div>
                   )}
                 </div>
@@ -920,8 +940,8 @@ export default function TicketDetailPage() {
                       placeholder="What must be true before this ticket can be marked done?"
                     />
                   ) : (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 whitespace-pre-wrap">
-                      {sections.dod?.trim() ? sections.dod : '—'}
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <MarkdownBlock content={sections.dod || ''} />
                     </div>
                   )}
                   {canEditInstructions && (!sections.dod.trim() || sections.dod.trim() === '—') && (
@@ -938,8 +958,8 @@ export default function TicketDetailPage() {
                       onChange={e => setSections(prev => ({ ...prev, notes: e.target.value }))}
                     />
                   ) : (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 whitespace-pre-wrap">
-                      {sections.notes?.trim() ? sections.notes : '—'}
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <MarkdownBlock content={sections.notes || ''} />
                     </div>
                   )}
                 </div>
@@ -982,7 +1002,9 @@ export default function TicketDetailPage() {
                       <span className="font-medium text-slate-900">{authorName(c.author_id)}</span>{' '}
                       <span className="text-xs">{formatDateTime(c.created_at)}</span>
                     </div>
-                    <div className="whitespace-pre-wrap text-sm text-slate-800">{c.body}</div>
+                    <div className="rounded-md bg-slate-50 p-3">
+                      <MarkdownBlock content={c.body} />
+                    </div>
                   </div>
                 ))}
               </div>
